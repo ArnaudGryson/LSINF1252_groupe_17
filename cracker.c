@@ -158,8 +158,12 @@ while(noch!=NULL){
       return -3; 
    }
    uint8_t a[32];
+   int s=-1;
    while(s!=0){
       s=read(fd,&a,32*sizeof(uint8_t));
+      if(s==-1){
+         return -3;
+      }
       sem_wait(&empty1);
       pthread_mutex_lock(&mutex);
       for(int i=0;i<nthreads;i++){
