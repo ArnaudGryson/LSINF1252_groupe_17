@@ -1,0 +1,13 @@
+créer fichiers:
+-cracker.h
+-main.c
+-dans le makefile:
+        cracker: cracker.o main.o
+        	gcc -o cracker cracker.o main.o
+
+	cracker.o: cracker.c
+		gcc -o cracker.o -c cracker.c -W -Wall -ansi -pedantic
+
+	main.o: main.c cracker.c
+		gcc -o main.o -c main.c -W -Wall -ansi -pedantic
+-tests
