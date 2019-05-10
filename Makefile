@@ -4,7 +4,7 @@ EXEC=src/cracker
 all: src/cracker
 	./src/cracker
 src/cracker:src/cracker.o src/reverse.o src/sha256.o
-	gcc -o src/cracker src/cracker.o src/reverse.o src/sha256.o -std=c99
+	gcc -o src/cracker src/cracker.o src/reverse.o src/sha256.o -lpthread -std=c99
 
 src/reverse.o:src/reverse.c src/reverse.h
 	gcc -o src/reverse.o -c src/reverse.c -std=c99 $(CFLAGS)
