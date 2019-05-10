@@ -2,7 +2,7 @@ CFLAGS=-Wall -Werror
 EXEC=src/cracker
 
 all: src/cracker
-	./src/cracker src/input/01_4c_1k.bin
+	./src/cracker src/intput/01_4c_1k.bin
 src/cracker:src/cracker.o src/reverse.o src/sha256.o
 	gcc -o src/cracker src/cracker.o src/reverse.o src/sha256.o -lpthread -std=c99
 
