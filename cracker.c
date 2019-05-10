@@ -1,4 +1,6 @@
 #include <stdio.h>
+#include <unistd.h>
+#include <stdbool.h>
 #include <pthread.h>
 #include <fcntl.h>
 #include <stdlib.h>
@@ -224,7 +226,7 @@ void *lecture(void* param){  //fonction executée par le thread de lecture
       noch=noch->next; //passage au prochain fichier entrant
    }
    fini1=1;
-   pthread_exit(); //fermeture du thread quand tous les fichiers ont été lus
+   pthread_exit(NULL); //fermeture du thread quand tous les fichiers ont été lus
 }
 
 
@@ -269,7 +271,7 @@ void *calcul(void* param){ //fonction executée par le thread de calcul
       }
       if(vide1==1){
          fini2++;
-         pthread_exit();
+         pthread_exit(NULL);
       }
    }
 }
@@ -314,7 +316,7 @@ void* candidat(void* param){ //fonction utilisée par le thread de tri
          (param->candi)->first=nod;
          (param->candi)->size++;
       }
-      if(n>Nmax){ //la liste de candidats est réinitialisée et le mot de passe y est stocké
+      if(n>nMax){ //la liste de candidats est réinitialisée et le mot de passe y est stocké
          nMax=n;
          (param->candi)->first=NULL;
          (param->candi)->size=0;
@@ -325,7 +327,7 @@ void* candidat(void* param){ //fonction utilisée par le thread de tri
          nod->value=b;
          nod->next=(param->candi)->first;
          (param->candi)->first=nod;
-         (param->candi)->size++;
+         ((param->candi)->size)++;
       }
    }
    if(fini2==nthreads){ //si les threads de calcul sont fermés et le buffer2 est vide on peut fermer le thread de tri 
@@ -336,7 +338,7 @@ void* candidat(void* param){ //fonction utilisée par le thread de tri
          }
       }
       if(vide2==1){
-         pthread_exit();
+         pthread_exit(NULL);
       }
    }
 }
