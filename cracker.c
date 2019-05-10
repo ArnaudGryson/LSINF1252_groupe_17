@@ -7,6 +7,8 @@
 #include <stdint.h>
 #include <string.h>
 #include <semaphore.h>
+#include "reverse.h"
+#include "sha256.h"
 
 int nthreads=1; //nombre maximal de thread par defaut 
 int voyelle=1;  //par defaut on compte les voyelles
@@ -23,7 +25,7 @@ sem_t full2;
 
 typedef struct node {  //structure representant un noeud
    struct node *next;
-   char value[];
+   char* value;
 } node_t;
 
 typedef struct list {  //structure representant une liste de noeud
@@ -32,18 +34,18 @@ typedef struct list {  //structure representant une liste de noeud
 } list_t;
 
 typedef struct mesParams1{  // structure permettant de stocker les arguments du premier type de thread
-   list_t fich;
-   uint8_t* buffer1[];
+   list_t* fich;
+   uint8_t** buffer1;
 } params1_t;
 
 typedef struct mesParams2{ //structure permettant de stocker les arguments du second type de thread
-   uint8_t* buffer1[];
-   char* buffer2[];
+   uint8_t** buffer1;
+   char** buffer2;
 } params2_t;
 
 typedef struct mesParams3{ //structure permettant de stocker les arguments du troisième type thread
-   char* buffer2[];
-   list_t candi;
+   char** buffer2;
+   list_t* candi;
 } params3_t;
 
 int main(int argc, char* argv[]) {  //fonction main
@@ -81,16 +83,22 @@ int main(int argc, char* argv[]) {  //fonction main
          filein->size++;
       }
    }
-   uint8_t* buffer1[nthreads] = (uint8_t*)malloc(nthreads*sizeof(uint8_t)*32); //creation du premier buffer
-   if(buffer1==NULL){
-      return -1;
+   uint8_t* buffer1[nthreads];
+   for(int i=0;i<nthreads;i++){
+      buffer1[i] = (uint8_t*)malloc(sizeof(uint8_t)*32); //creation du premier buffer
+      if(buffer1[i]==NULL){
+         return -1;
+      }
    }
    for(int i=0;i<nthreads;i++){ //mise a zero du premier buffer
       buffer1[i]=NULL;
    }
-   char* buffer2[nthreads] = (char*)malloc(16*nthreads*sizeof(char)); //creation du second buffer
-   if(buffer2==NULL){ 
-      return -1;
+   char* buffer2[nthreads];
+   for(int i=0;i<nthreads;i++){
+      buffer2[i] = (char*)malloc(16*sizeof(char)); //creation du second buffer
+      if(buffer2[i]==NULL){ 
+         return -1;
+      }
    }
    for(int i=0;i<nthreads;i++){ //mise à zero du second buffer
       buffer2[i]=NULL;
@@ -117,7 +125,7 @@ int main(int argc, char* argv[]) {  //fonction main
    if(paramlect==NULL){
       return -1;
    }
-   paramlect->fich = *filein;
+   paramlect->fich = filein;
    paramlect->buffer1 = buffer1;
 
    params2_t* paramcalc=(params2_t*)malloc(sizeof(params2_t)); //creation des arguments donnés au second type de thread
@@ -132,7 +140,7 @@ int main(int argc, char* argv[]) {  //fonction main
       return -1;
    }
    paramcand->buffer2=buffer2;
-   paramcand->candi=*candi;
+   paramcand->candi=candi;
 
    int lect1= pthread_create(&lect,NULL,&lecture,(void*)paramlect); //creation du thread de lecture
    if(lect1!=0){
@@ -140,8 +148,8 @@ int main(int argc, char* argv[]) {  //fonction main
    }
    for(int i=0;i<nthreads;i++){  //creation des threads de calcul
       int calc1= pthread_create(&calc[i],NULL,&calcul,(void*)paramcalc);
-      if(calc1!=0)
-         return-2;
+      if(calc1!=0){
+        return -2;
       }
    }
    int cand1= pthread_create(&cand,NULL,&candidat,(void*)paramcand); //creation du thread de tri
@@ -151,40 +159,45 @@ int main(int argc, char* argv[]) {  //fonction main
 
    int ptj = pthread_join(cand,NULL);
    if(ptj!=0){
-      return -5;
+      return -3;
    }
+   int fd;
    if(fileo!=0){ //ouverture du fichier de sortie
-      int fd=open(fileout,O_RDONLY|O_CREAT|O_TRUNC);
+      fd=open(fileout,O_RDONLY|O_CREAT|O_TRUNC);
       if(fd==-1){
-         return -3;
+         return -5;
       }
    }
    else{
       fd=1;
    }
    for(int i=0;i<(candi->size);i++){  //ecriture des resultats
-      int erf = write(fd,(void*) candi->value, strlen(candi->value));
+      int erf = write(fd,(candi->first)->value, strlen((candi->first)->value));
       if(erf==-1){
-         return -7;
+         return -4;
       }
-      candi=candi->next;
+      candi->first=(candi->first)->next;
    }
    int clos=close(fd);
    if(clos==-1){
-      return -6;
+      return -3;
    }
-   while(node_t curr1=(filein->first))!=NULL){    //libération de la mémoire allouée par malloc
+   node_t* curr1=filein->first;
+   while(curr1!=NULL){    //libération de la mémoire allouée par malloc
       filein->first=(filein->first)->next;
       free(curr1);
+      curr1=filein->first;
    }
    free(filein);
    for(int i=0;i<nthreads;i++){
       free(buffer1[i]);
       free(buffer2[i]);
    }
-   while(node_t curr2=(candi->first))!=NULL){
+   node_t* curr2=candi->first;
+   while(curr2!=NULL){
       candi->first=(candi->first)->next;
       free(curr2);
+      curr2=candi->first;
    }
    free(candi);
    return(EXIT_SUCCESS);
@@ -194,25 +207,25 @@ int main(int argc, char* argv[]) {  //fonction main
 
 
 void *lecture(void* param){  //fonction executée par le thread de lecture
-   param=(params1_t*)param;
-   node_t noch = param->filein->first;
+   params1_t* parame=(params1_t*)param;
+   node_t* noch = (parame->fich)->first;
    while(noch!=NULL){
       int fd = open(noch->value,O_RDONLY); //ouverture d'un fichier entrant
       if(fd==-1){
-         return -3; 
+         exit(EXIT_FAILURE); 
       }
-      uint8_t a[32];
+      uint8_t* a;
       int s=-1;
       while(s!=0){
          s=read(fd,&a,32*sizeof(uint8_t)); //lecture d'un mot de passe crypté
          if(s==-1){
-            return -3;
+            exit(EXIT_FAILURE);
          }
          sem_wait(&empty1);
-         pthread_mutex_lock(&mutex);
+         pthread_mutex_lock(&mutex1);
          for(int i=0;i<nthreads;i++){
-            if((param->buffer1)[i]==NULL){ //le mot de passe crypté est mis dans le buffer1
-               (param->buffer1)[i]=a;
+            if((parame->buffer1)[i]==NULL){ //le mot de passe crypté est mis dans le buffer1
+               (parame->buffer1)[i]=a;
                i=nthreads;
             }
          }
@@ -221,7 +234,7 @@ void *lecture(void* param){  //fonction executée par le thread de lecture
       }
       int clos = close(fd);
       if(clos==-1){
-          return -6;
+          exit(EXIT_FAILURE);
       }
       noch=noch->next; //passage au prochain fichier entrant
    }
@@ -232,16 +245,16 @@ void *lecture(void* param){  //fonction executée par le thread de lecture
 
 
 void *calcul(void* param){ //fonction executée par le thread de calcul
-   param=(params2_t*)param;
-   uint8_t a[32];
+   params2_t* parame=(params2_t*)param;
+   uint8_t* a;
    char* b;
    while(true){
       sem_wait(&full1);
       pthread_mutex_lock(&mutex1);
       for(int i=0;i<nthreads;i++){ 
-         if((param->buffer1)[i]!=NULL){ //lecture d'un mot de passe crypté du buffer1
-            a=(param->buffer1)[i];
-            (param->buffer1)[i]=NULL;
+         if((parame->buffer1)[i]!=NULL){ //lecture d'un mot de passe crypté du buffer1
+            a=(parame->buffer1)[i];
+            (parame->buffer1)[i]=NULL;
             i=nthreads;
          }
       }
@@ -249,13 +262,13 @@ void *calcul(void* param){ //fonction executée par le thread de calcul
       sem_post(&empty1);
       bool okay = reversehash(&a,&b,16*sizeof(char)); //crackage du mot de passe
       if(!okay){
-         return -4;
+         exit(EXIT_FAILURE);
       }
       sem_wait(&empty2);
       pthread_mutex_lock(&mutex2);
       for(int i=0;i<nthreads;i++){
-         if((param->buffer2)[i]==NULL){ //ecriture du mot de passe décrypté dans le buffer2
-            (param->buffer2)[i]=b;
+         if((parame->buffer2)[i]==NULL){ //ecriture du mot de passe décrypté dans le buffer2
+            (parame->buffer2)[i]=b;
             i=nthreads;
          }
       }
@@ -265,7 +278,7 @@ void *calcul(void* param){ //fonction executée par le thread de calcul
    if(fini1==1){ //si le thread de lecture est fermé et le buffer1 est vide on peut fermer les threads de calcul
       int vide1=1;
       for(int i=0;i<nthreads;i++){
-         if((param->buffer1)[i]!=NULL){
+         if((parame->buffer1)[i]!=NULL){
             vide1=0;
          }
       }
@@ -277,7 +290,7 @@ void *calcul(void* param){ //fonction executée par le thread de calcul
 }
 
 void* candidat(void* param){ //fonction utilisée par le thread de tri
-   param=(params3_t*)param;
+   params3_t* parame=(params3_t*)param;
    int nMax=1; //nombre maximale de voyelle (ou de consonne)
    char* b;
 
@@ -285,9 +298,9 @@ void* candidat(void* param){ //fonction utilisée par le thread de tri
       sem_wait(&full2);
       pthread_mutex_lock(&mutex2);
       for(int i=0;i<nthreads;i++){
-         if((param->buffer2)[i]!=NULL){ //lecture d'un mot de passe décrypté du buffer2
-            b=(param->buffer2)[i];
-            (param->buffer2)[i]=NULL;
+         if((parame->buffer2)[i]!=NULL){ //lecture d'un mot de passe décrypté du buffer2
+            b=(parame->buffer2)[i];
+            (parame->buffer2)[i]=NULL;
             i=nthreads;
          }
       }
@@ -309,31 +322,31 @@ void* candidat(void* param){ //fonction utilisée par le thread de tri
       if(nMax==n){ //le mot de passe est ajouté à la liste de candidats
          node_t* nod = (node_t*)malloc(sizeof(node_t));
          if(nod==NULL){
-            return -1;
+             exit(EXIT_FAILURE);
          }
          nod->value=b;
-         nod->next=(param->candi)->first;
-         (param->candi)->first=nod;
-         (param->candi)->size++;
+         nod->next=(parame->candi)->first;
+         (parame->candi)->first=nod;
+         (parame->candi)->size++;
       }
       if(n>nMax){ //la liste de candidats est réinitialisée et le mot de passe y est stocké
          nMax=n;
-         (param->candi)->first=NULL;
-         (param->candi)->size=0;
+         (parame->candi)->first=NULL;
+         (parame->candi)->size=0;
          node_t* nod = (node_t*)malloc(sizeof(node_t));
          if(nod==NULL){
-            return -1;
+            exit(EXIT_FAILURE);
          }
          nod->value=b;
-         nod->next=(param->candi)->first;
-         (param->candi)->first=nod;
-         ((param->candi)->size)++;
+         nod->next=(parame->candi)->first;
+         (parame->candi)->first=nod;
+         ((parame->candi)->size)++;
       }
    }
    if(fini2==nthreads){ //si les threads de calcul sont fermés et le buffer2 est vide on peut fermer le thread de tri 
       int vide2=1;
       for(int i=0;i<nthreads;i++){
-         if((param->buffer2)[i]!=NULL){
+         if((parame->buffer2)[i]!=NULL){
             vide2=0;
          }
       }
