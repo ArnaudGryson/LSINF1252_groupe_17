@@ -1,27 +1,16 @@
 CFLAGS=-Wall -Werror
-EXEC=cracker
-SRC=$(wildcard *.c)
-OBJ=$(SRC:.c=.o)
-//make all
-all: main
+EXEC=./src/cracker
 
+all: ./src/cracker
+	./src/cracker
 
-//make
-cracker: cracker.o main.o
-	gcc -o cracker cracker.o main.o
-cracker.o: cracker.c
-	gcc -o cracker.o -c cracker.c $(CFLAGS)
-main.o: main.c cracker.h
-	gcc -o main.o -c main.c $(CFLAGS)
-run: cracker
-	./cracker
+./src/cracker:./src/cracker.o ./src/main.o
+	gcc -o ./src/cracker ./src/cracker.o ./src/main.o -std=c99
+./src/cracker.o:./src/cracker.c
+	gcc -o ./src/cracker.o -c ./src/cracker.c -std=c99 $(CFLAGS)
+./src/main.o:./src/main.c ./src/cracker.h
+	gcc -o ./src/main.o -c ./src/main.c -std=c99 $(CFLAGS)
 
-//make tests
-run: tests
-	./tests
-
-//make clean
+.PHONY : clean
 clean:
-	rm -f *.o
-mrproper: clean
-	rm -f $(EXEC)
+	rm -f ./src/*.o
