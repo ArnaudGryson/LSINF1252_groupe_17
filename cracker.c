@@ -4,6 +4,8 @@
 
 int nthreads=1; //nombre maximal de thread par defaut 
 int voyelle=1;  //par defaut on compte les voyelles
+int fini1=0;    // variable indiquant si le thread de lecture a fini son execution
+int fini2=0;    // variable indiquant si les threads de calcul ont fini leurs executions
 
 pthread_mutex_t mutex1; //mutex et sémaphores du premier producteur-consommateur
 sem_t empty1;
@@ -55,11 +57,10 @@ int main(int argc, char* argv[]) {  //fonction main
          i++;
       }
       else if(strcmp(argv[i],"-c")==0){
-         voyelle=0; //les consonnes sont maintenant comptees
+         voyelle=0; //les consonnes sont maintenant comptées
       }
       else if(strcmp(argv[i],"-o")==0){
          *fileo=1;   // fichier de sortie pour y écrire les canditats finaux
-         fileout=(char*)malloc(sizeof(char)*strlen(argv[i+1]);
          fileout=argv[i+1];
          i++;
       }
@@ -124,8 +125,8 @@ int main(int argc, char* argv[]) {  //fonction main
    if(paramcand==NULL){
       return -1;
    }
-paramcand->buffer2=buffer2;
-paramcand->candi=candi;
+   paramcand->buffer2=buffer2;
+   paramcand->candi=candi;
 
    int lect1= pthread_create(&lect,NULL,&lecture,(void*)paramlect); //creation du thread de lecture
    if(lect1!=0){
@@ -156,9 +157,9 @@ paramcand->candi=candi;
       fd=1;
    }
    for(int i=0;i<(candi->size);i++){  //ecriture des resultats
-      int erf = write(fd,(void*) candi->value, strlen(candi->value))
+      int erf = write(fd,(void*) candi->value, strlen(candi->value));
       if(erf==-1){
-         return -6;
+         return -7;
       }
       candi=candi->next;
    }
@@ -166,6 +167,21 @@ paramcand->candi=candi;
    if(clos==-1){
       return -6;
    }
+   while(node_t curr=(filein->first))!=NULL){    //libération de la mémoire allouée par malloc
+      filein->first=(filein->first)->next;
+      free(curr);
+   }
+   free(filein);
+   for(int i=0;i<nthreads;i++){
+      freebuffer1[i];
+      freebuffer2[i];
+   }
+   while(node_t curr=(candi->first))!=NULL){
+      candi->first=(candi->first)->next;
+      free(curr);
+   }
+   free(candi);
+   return(EXIT_SUCCESS);
 }
 
 
@@ -203,7 +219,8 @@ void *lecture(void* param){  //fonction executée par le thread de lecture
       }
       noch=noch->next; //passage au prochain fichier entrant
    }
-   pthread_exit(); //fermeture du thread quand tous les fichier ont été lus
+   fini1=1;
+   pthread_exit(); //fermeture du thread quand tous les fichiers ont été lus
 }
 
 
@@ -220,9 +237,6 @@ void *calcul(void* param){ //fonction executée par le thread de calcul
             a=(param->buffer1)[i];
             (param->buffer1)[i]=NULL;
             i=nthreads;
-         }
-         if(i==(nthreads-1){
-            pthread_exit();
          }
       }
       pthread_mutex_unlock(&mutex1);
@@ -241,6 +255,18 @@ void *calcul(void* param){ //fonction executée par le thread de calcul
       }
       pthread_mutex_unlock(&mutex2);
       sem_post(&full2);
+   }
+   if(fini1==1){ //si le thread de lecture est fermé et le buffer1 est vide on peut fermer les threads de calcul
+      int vide1=1;
+      for(int i=0;i<nthreads;i++){
+         if((param->buffer1)[i]!=NULL){
+            vide1=0;
+         }
+      }
+      if(vide1==1){
+         fini2++;
+         pthread_exit();
+      }
    }
 }
 
@@ -284,7 +310,7 @@ void* candidat(void* param){ //fonction utilisée par le thread de tri
          (param->candi)->first=nod;
          (param->candi)->size++;
       }
-      if(n>Nmax){ //la liste de candidats est réinitiliasée et le mot de passe y est stocké
+      if(n>Nmax){ //la liste de candidats est réinitialisée et le mot de passe y est stocké
          nMax=n;
          (param->candi)->first=NULL;
          (param->candi)->size=0;
@@ -296,6 +322,17 @@ void* candidat(void* param){ //fonction utilisée par le thread de tri
          nod->next=(param->candi)->first;
          (param->candi)->first=nod;
          (param->candi)->size++;
+      }
+   }
+   if(fini2==nthreads){ //si les threads de calcul sont fermés et le buffer2 est vide on peut fermer le thread de tri 
+      int vide2=1;
+      for(int i=0;i<nthreads;i++){
+         if((param->buffer2)[i]!=NULL){
+            vide2=0;
+         }
+      }
+      if(vide2==1){
+         pthread_exit();
       }
    }
 }
