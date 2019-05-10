@@ -48,6 +48,155 @@ typedef struct mesParams3{ //structure permettant de stocker les arguments du tr
    list_t* candi;
 } params3_t;
 
+void *lecture(void* param){  //fonction executée par le thread de lecture
+   params1_t* parame=(params1_t*)param;
+   node_t* noch = (parame->fich)->first;
+   while(noch!=NULL){
+      int fd = open(noch->value,O_RDONLY); //ouverture d'un fichier entrant
+      if(fd==-1){
+         exit(EXIT_FAILURE);
+      }
+      uint8_t* a;
+      int s=-1;
+      while(s!=0){
+         s=read(fd,&a,32*sizeof(uint8_t)); //lecture d'un mot de passe crypté
+         if(s==-1){
+            exit(EXIT_FAILURE);
+         }
+         sem_wait(&empty1);
+         pthread_mutex_lock(&mutex1);
+         for(int i=0;i<nthreads;i++){
+            if((parame->buffer1)[i]==NULL){ //le mot de passe crypté est mis dans le buffer1
+               (parame->buffer1)[i]=a;
+               i=nthreads;
+            }
+         }
+         pthread_mutex_unlock(&mutex1);
+         sem_post(&full1);
+      }
+      int clos = close(fd);
+      if(clos==-1){
+          exit(EXIT_FAILURE);
+      }
+      noch=noch->next; //passage au prochain fichier entrant
+   }
+   fini1=1;
+   pthread_exit(NULL); //fermeture du thread quand tous les fichiers ont été lus
+}
+
+void *calcul(void* param){ //fonction executée par le thread de calcul
+   params2_t* parame=(params2_t*)param;
+   uint8_t* a;
+   char* b="";
+   while(true){
+      sem_wait(&full1);
+      pthread_mutex_lock(&mutex1);
+      for(int i=0;i<nthreads;i++){
+         if((parame->buffer1)[i]!=NULL){ //lecture d'un mot de passe crypté du buffer1
+            a=(parame->buffer1)[i];
+            (parame->buffer1)[i]=NULL;
+            i=nthreads;
+         }
+      }
+      pthread_mutex_unlock(&mutex1);
+      sem_post(&empty1);
+      bool okay = reversehash(a,b,16*sizeof(char)); //crackage du mot de passe
+      if(!okay){
+         exit(EXIT_FAILURE);
+      }
+      sem_wait(&empty2);
+      pthread_mutex_lock(&mutex2);
+      for(int i=0;i<nthreads;i++){
+         if((parame->buffer2)[i]==NULL){ //ecriture du mot de passe décrypté dans le buffer2
+            (parame->buffer2)[i]=b;
+            i=nthreads;
+         }
+      }
+      pthread_mutex_unlock(&mutex2);
+      sem_post(&full2);
+   }
+   if(fini1==1){ //si le thread de lecture est fermé et le buffer1 est vide on peut fermer les threads de calcul
+      int vide1=1;
+      for(int i=0;i<nthreads;i++){
+         if((parame->buffer1)[i]!=NULL){
+            vide1=0;
+         }
+      }
+      if(vide1==1){
+         fini2++;
+         pthread_exit(NULL);
+      }
+   }
+}
+
+void* candidat(void* param){ //fonction utilisée par le thread de tri
+   params3_t* parame=(params3_t*)param;
+   int nMax=1; //nombre maximale de voyelle (ou de consonne)
+   char* b;
+
+   while(true){
+      sem_wait(&full2);
+      pthread_mutex_lock(&mutex2);
+      for(int i=0;i<nthreads;i++){
+         if((parame->buffer2)[i]!=NULL){ //lecture d'un mot de passe décrypté du buffer2
+            b=(parame->buffer2)[i];
+            (parame->buffer2)[i]=NULL;
+            i=nthreads;
+         }
+      }
+      pthread_mutex_unlock(&mutex2);
+      sem_post(&empty2);
+      int n=0;
+      for(int j=0; *(b+j)!='\0';j++){ //comptage du nombre de voyelle ou de consonne
+         if(voyelle==1){
+            if(*(b+j)=='a'||*(b+j)=='e'||*(b+j)=='i'||*(b+j)=='o'||*(b+j)=='u'||*(b+j)=='y'){
+               n=n+1;
+            }
+         }
+         else {
+            if(!(*(b+j)=='a'||*(b+j)=='e'||*(b+j)=='i'||*(b+j)=='o'||*(b+j)=='u'||*(b+j)=='y')){
+               n=n+1;
+            }
+         }
+      }
+      if(nMax==n){ //le mot de passe est ajouté à la liste de candidats
+         node_t* nod = (node_t*)malloc(sizeof(node_t));
+         if(nod==NULL){
+             exit(EXIT_FAILURE);
+         }
+         nod->value=b;
+         nod->next=(parame->candi)->first;
+         (parame->candi)->first=nod;
+         (parame->candi)->size++;
+      }
+      if(n>nMax){ //la liste de candidats est réinitialisée et le mot de passe y est stocké
+         nMax=n;
+         (parame->candi)->first=NULL;
+         (parame->candi)->size=0;
+         node_t* nod = (node_t*)malloc(sizeof(node_t));
+         if(nod==NULL){
+            exit(EXIT_FAILURE);
+         }
+         nod->value=b;
+         nod->next=(parame->candi)->first;
+         (parame->candi)->first=nod;
+         ((parame->candi)->size)++;
+      }
+   }
+   if(fini2==nthreads){ //si les threads de calcul sont fermés et le buffer2 est vide on peut fermer le thread de tri
+      int vide2=1;
+      for(int i=0;i<nthreads;i++){
+         if((parame->buffer2)[i]!=NULL){
+            vide2=0;
+         }
+      }
+      if(vide2==1){
+         pthread_exit(NULL);
+      }
+   }
+}
+
+
 int main(int argc, char* argv[]) {  //fonction main
 
    int fileo=0; //par defaut il n'y a pas de fichier de sortie
@@ -205,7 +354,7 @@ int main(int argc, char* argv[]) {  //fonction main
 
 
 
-
+/*
 void *lecture(void* param){  //fonction executée par le thread de lecture
    params1_t* parame=(params1_t*)param;
    node_t* noch = (parame->fich)->first;
@@ -260,7 +409,7 @@ void *calcul(void* param){ //fonction executée par le thread de calcul
       }
       pthread_mutex_unlock(&mutex1);
       sem_post(&empty1);
-      bool okay = reversehash(&a,&b,16*sizeof(char)); //crackage du mot de passe
+      bool okay = reversehash(a,b,16*sizeof(char)); //crackage du mot de passe
       if(!okay){
          exit(EXIT_FAILURE);
       }
@@ -355,3 +504,5 @@ void* candidat(void* param){ //fonction utilisée par le thread de tri
       }
    }
 }
+
+*/
