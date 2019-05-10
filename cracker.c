@@ -1,5 +1,9 @@
 #include <stdio.h>
+#include <pthread.h>
+#include <fcntl.h>
 #include <stdlib.h>
+#include <stdint.h>
+#include <string.h>
 #include <semaphore.h>
 
 int nthreads=1; //nombre maximal de thread par defaut 
@@ -51,7 +55,7 @@ int main(int argc, char* argv[]) {  //fonction main
    filein->first=NULL;
    filein->size=0;
 
-   for(i=1;i<argc;i++){ //parcours des arguments
+   for(int i=1;i<argc;i++){ //parcours des arguments
       if(strcmp(argv[i],"-t")==0){
          nthreads=atoi(argv[i+1]); //nombre de threads maximales
          i++;
@@ -60,34 +64,34 @@ int main(int argc, char* argv[]) {  //fonction main
          voyelle=0; //les consonnes sont maintenant comptées
       }
       else if(strcmp(argv[i],"-o")==0){
-         *fileo=1;   // fichier de sortie pour y écrire les canditats finaux
+         fileo=1;   // fichier de sortie pour y écrire les canditats finaux
          fileout=argv[i+1];
          i++;
       }
       else{  //les autres arguments sont les fichiers d'entrée
-      node_t* nod = (node_t*)malloc(sizeof(node_t));
-      if(nod==NULL){
-      return -1;
+         node_t* nod = (node_t*)malloc(sizeof(node_t));
+         if(nod==NULL){
+            return -1;
+         }
+         nod->value=argv[i];
+         nod->next=filein->first;
+         filein->first=nod;
+         filein->size++;
       }
-      nod->value=argv[i];
-      nod->next=filein->first;
-      filein->first=nod;
-      filein->size++;
-      }
-
+   }
    uint8_t* buffer1[] = (uint8_t*)malloc(nthreads*sizeof(uint8_t)*32); //creation du premier buffer
    if(buffer1==NULL){
       return -1;
    }
    for(int i=0;i<nthreads;i++){ //mise a zero du premier buffer
-      *buffer1[i]=NULL;
+      buffer1[i]=NULL;
    }
    char* buffer2[] = (char*)malloc(16*nthreads*sizeof(char)); //creation du second buffer
    if(buffer2==NULL){ 
       return -1;
    }
    for(int i=0;i<nthreads;i++){ //mise à zero du second buffer
-      *buffer2[i]=NULL;
+      buffer2[i]=NULL;
    }
    list_t* candi=(list_t*)malloc(sizeof(list_t)); //creation de la liste de candidats
    if(candi==NULL){
@@ -111,7 +115,7 @@ int main(int argc, char* argv[]) {  //fonction main
    if(paramlect==NULL){
       return -1;
    }
-   paramlect->fich = filein;
+   paramlect->fich = *filein;
    paramlect->buffer1 = buffer1;
 
    params2_t* paramcalc=(params2_t*)malloc(sizeof(params2_t)); //creation des arguments donnés au second type de thread
@@ -126,7 +130,7 @@ int main(int argc, char* argv[]) {  //fonction main
       return -1;
    }
    paramcand->buffer2=buffer2;
-   paramcand->candi=candi;
+   paramcand->candi=*candi;
 
    int lect1= pthread_create(&lect,NULL,&lecture,(void*)paramlect); //creation du thread de lecture
    if(lect1!=0){
@@ -148,7 +152,7 @@ int main(int argc, char* argv[]) {  //fonction main
       return -5;
    }
    if(fileo!=0){ //ouverture du fichier de sortie
-      fd=open(fileout,O_RDONLY|O_CREAT|O_TRUNC);
+      int fd=open(fileout,O_RDONLY|O_CREAT|O_TRUNC);
       if(fd==-1){
          return -3;
       }
@@ -167,18 +171,18 @@ int main(int argc, char* argv[]) {  //fonction main
    if(clos==-1){
       return -6;
    }
-   while(node_t curr=(filein->first))!=NULL){    //libération de la mémoire allouée par malloc
+   while(node_t curr1=(filein->first))!=NULL){    //libération de la mémoire allouée par malloc
       filein->first=(filein->first)->next;
-      free(curr);
+      free(curr1);
    }
    free(filein);
    for(int i=0;i<nthreads;i++){
-      freebuffer1[i];
-      freebuffer2[i];
+      free(buffer1[i]);
+      free(buffer2[i]);
    }
-   while(node_t curr=(candi->first))!=NULL){
+   while(node_t curr2=(candi->first))!=NULL){
       candi->first=(candi->first)->next;
-      free(curr);
+      free(curr2);
    }
    free(candi);
    return(EXIT_SUCCESS);
