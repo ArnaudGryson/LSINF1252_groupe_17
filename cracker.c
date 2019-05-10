@@ -81,14 +81,14 @@ int main(int argc, char* argv[]) {  //fonction main
          filein->size++;
       }
    }
-   uint8_t* buffer1[] = (uint8_t*)malloc(nthreads*sizeof(uint8_t)*32); //creation du premier buffer
+   uint8_t* buffer1[nthreads] = (uint8_t*)malloc(nthreads*sizeof(uint8_t)*32); //creation du premier buffer
    if(buffer1==NULL){
       return -1;
    }
    for(int i=0;i<nthreads;i++){ //mise a zero du premier buffer
       buffer1[i]=NULL;
    }
-   char* buffer2[] = (char*)malloc(16*nthreads*sizeof(char)); //creation du second buffer
+   char* buffer2[nthreads] = (char*)malloc(16*nthreads*sizeof(char)); //creation du second buffer
    if(buffer2==NULL){ 
       return -1;
    }
